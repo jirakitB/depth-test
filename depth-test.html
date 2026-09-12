@@ -1,0 +1,511 @@
+<!DOCTYPE html>
+<html lang="th">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>ทดสอบสายตาทางลึก (โหมดสมจริง) | Depth Perception Test</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  <style>
+    :root {
+      --bg: #000000;
+      --panel: #12181f;
+      --panel-border: #232d38;
+      --ink: #eef2f5;
+      --ink-muted: #8b98a5;
+      --accent: #e8a33d;
+      --good: #4fbf82;
+      --bad: #e0554a;
+    }
+
+    * {
+      box-sizing: border-box;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    html,
+    body {
+      margin: 0;
+      padding: 0;
+      width: 100%;
+      height: 100%;
+      background: var(--bg);
+      color: var(--ink);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans Thai", "Sarabun", sans-serif;
+      overflow: hidden;
+    }
+
+    #canvas-container {
+      position: absolute;
+      inset: 0;
+    }
+
+    #canvas-container canvas {
+      display: block;
+    }
+
+    /* ช่องมองตู้ทดสอบจำลองให้แคบลงเหมือนตู้ขนส่งจริง */
+    .vignette {
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+      box-shadow: inset 0 0 100px 80px #000;
+      z-index: 5;
+    }
+
+    .top-bar {
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      z-index: 10;
+      padding: 14px 16px 10px;
+      background: linear-gradient(180deg, rgba(0, 0, 0, 0.9), rgba(0, 0, 0, 0));
+      text-align: center;
+    }
+
+    .title {
+      font-size: 15px;
+      font-weight: 700;
+      margin: 0 0 2px;
+    }
+
+    .round-status {
+      font-size: 13px;
+      color: var(--accent);
+      font-weight: 600;
+    }
+
+    .instructions {
+      position: absolute;
+      top: 62px;
+      left: 12px;
+      right: 12px;
+      z-index: 10;
+      background: rgba(18, 24, 31, 0.85);
+      border: 1px solid var(--panel-border);
+      border-radius: 10px;
+      padding: 9px 12px;
+      font-size: 12.5px;
+      color: var(--ink-muted);
+      max-width: 480px;
+      margin: 0 auto;
+      margin-top: 1rem;
+      text-align: center;
+    }
+
+    .instructions b {
+      color: var(--ink);
+    }
+
+    .toast {
+      position: absolute;
+      left: 50%;
+      top: 120px;
+      transform: translateX(-50%);
+      z-index: 15;
+      background: var(--panel);
+      border: 1px solid var(--panel-border);
+      border-radius: 12px;
+      padding: 14px 18px;
+      text-align: center;
+      min-width: 240px;
+      display: none;
+    }
+
+    .toast.show {
+      display: block;
+    }
+
+    .toast .err {
+      font-size: 20px;
+      font-weight: 700;
+      margin: 2px 0 10px;
+    }
+
+    .toast .lbl {
+      font-size: 12.5px;
+      color: var(--ink-muted);
+    }
+
+    .toast button {
+      margin-top: 4px;
+      background: var(--accent);
+      color: #14100a;
+      border: none;
+      border-radius: 8px;
+      padding: 9px 18px;
+      font-weight: 700;
+      font-size: 14px;
+      cursor: pointer;
+    }
+
+    .controls {
+      position: absolute;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      z-index: 10;
+      padding: 14px 16px calc(14px + env(safe-area-inset-bottom));
+      background: linear-gradient(0deg, rgba(0, 0, 0, 0.95), rgba(0, 0, 0, 0));
+    }
+
+    .btn-row {
+      display: flex;
+      gap: 10px;
+      max-width: 460px;
+      margin: 0 auto;
+    }
+
+    .ctrl-btn {
+      flex: 1;
+      background: var(--panel);
+      border: 1px solid var(--panel-border);
+      color: var(--ink);
+      border-radius: 12px;
+      padding: 16px 8px;
+      font-size: 22px;
+      font-weight: 700;
+      cursor: pointer;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 2px;
+      user-select: none;
+    }
+
+    .ctrl-btn span.lbl {
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--ink-muted);
+    }
+
+    .ctrl-btn:active {
+      transform: translateY(1px);
+      background: #1a222b;
+    }
+
+    .submit-btn {
+      flex: 1.4;
+      background: var(--accent);
+      color: #14100a;
+      border: none;
+      border-radius: 12px;
+      font-size: 15px;
+      font-weight: 700;
+      cursor: pointer;
+    }
+
+    .key-hint {
+      text-align: center;
+      font-size: 11px;
+      color: var(--ink-muted);
+      margin-top: 8px;
+    }
+
+    .modal-overlay {
+      position: absolute;
+      inset: 0;
+      z-index: 30;
+      background: rgba(0, 0, 0, 0.88);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+    }
+
+    .modal-overlay.show {
+      display: flex;
+    }
+
+    .modal {
+      background: var(--panel);
+      border: 1px solid var(--panel-border);
+      border-radius: 18px;
+      padding: 26px 22px;
+      width: 100%;
+      max-width: 380px;
+      text-align: center;
+    }
+
+    .modal .status {
+      font-size: 26px;
+      font-weight: 800;
+      margin: 0 0 4px;
+    }
+
+    .modal .status.pass {
+      color: var(--good);
+    }
+
+    .modal .status.fail {
+      color: var(--bad);
+    }
+
+    .modal .status-sub {
+      font-size: 13px;
+      color: var(--ink-muted);
+      margin-bottom: 18px;
+    }
+
+    .result-list {
+      text-align: left;
+      background: rgba(255, 255, 255, 0.03);
+      border: 1px solid var(--panel-border);
+      border-radius: 10px;
+      padding: 12px 14px;
+      margin-bottom: 16px;
+      font-size: 13.5px;
+    }
+
+    .result-list .row {
+      display: flex;
+      justify-content: space-between;
+      padding: 5px 0;
+      color: var(--ink-muted);
+    }
+
+    .result-list .row span:last-child {
+      color: var(--ink);
+      font-weight: 600;
+    }
+
+    .result-list .avg-row {
+      border-top: 1px solid var(--panel-border);
+      margin-top: 4px;
+      padding-top: 9px;
+    }
+
+    .result-list .avg-row span:last-child {
+      color: var(--accent);
+    }
+
+    .restart-btn {
+      width: 100%;
+      background: var(--accent);
+      color: #14100a;
+      border: none;
+      border-radius: 10px;
+      padding: 13px;
+      font-size: 15px;
+      font-weight: 700;
+      cursor: pointer;
+    }
+  </style>
+</head>
+
+<body>
+
+  <div id="canvas-container"></div>
+  <div class="vignette"></div>
+
+  <div class="top-bar">
+    <p class="title">ทดสอบสายตาทางลึก (โหมดสมจริง)</p>
+    <p class="round-status" id="roundStatus">รอบที่ 1 จาก 3 · Round 1 of 3</p>
+  </div>
+
+  <div class="instructions">
+    เลื่อน<b>เสาสีเขียว</b>ให้เท่ากับ<b>เสาสีแดง</b> แล้วกด "ยืนยัน"
+  </div>
+
+  <div class="toast" id="toast">
+    <div class="lbl">ระยะคลาดเคลื่อนรอบนี้</div>
+    <div class="err" id="toastErr">0.0 ซม.</div>
+    <button id="toastNext">ถัดไป · Next</button>
+  </div>
+
+  <div class="controls" id="controlsBar">
+    <div class="btn-row">
+      <button class="ctrl-btn" id="btnCloser">▲<span class="lbl">ดึงเข้าหาตัว</span></button>
+      <button class="ctrl-btn" id="btnFarther">▼<span class="lbl">ดันออกไป</span></button>
+      <button class="submit-btn" id="btnSubmit">ยืนยัน<br />Submit</button>
+    </div>
+    <p class="key-hint">คีย์บอร์ด: ↑ / ↓ ขยับเสา · Enter ยืนยัน</p>
+  </div>
+
+  <div class="modal-overlay" id="modalOverlay">
+    <div class="modal">
+      <p class="status" id="modalStatus">PASS</p>
+      <p class="status-sub" id="modalStatusSub">ค่าเฉลี่ยคลาดเคลื่อน 0.0 ซม.</p>
+      <div class="result-list">
+        <div class="row"><span>รอบที่ 1</span><span id="r1val">–</span></div>
+        <div class="row"><span>รอบที่ 2</span><span id="r2val">–</span></div>
+        <div class="row"><span>รอบที่ 3</span><span id="r3val">–</span></div>
+        <div class="row avg-row"><span>ค่าเฉลี่ย · Average</span><span id="avgVal">–</span></div>
+      </div>
+      <button class="restart-btn" id="restartBtn">เริ่มทดสอบใหม่ · Restart Full Test</button>
+    </div>
+  </div>
+
+  <script>
+    (function () {
+      const CM_PER_UNIT = 2.5;
+      const MOVE_STEP = 0.04;       // ปรับให้ขยับละเอียดยิ่งขึ้น
+      const Z_RANGE = 1.5;
+      const TOTAL_ROUNDS = 3;
+      const PASS_THRESHOLD_CM = 2.5;
+
+      let round = 1;
+      let roundErrors = [];
+      let locked = false;
+
+      // ---------------- Three.js Setup (ปรับเพื่อความสมจริง) ----------------
+      const container = document.getElementById('canvas-container');
+      const scene = new THREE.Scene();
+      scene.background = new THREE.Color(0x020202); // พื้นหลังดำสนิท ป้องกันการกะระยะจากผนัง
+
+      // 1. ปรับ FOV แคบลงเหลือ 22 และถอยกล้องไปไกลขึ้นที่ Z = 15
+      // วิธีนี้จะทำให้Perspectiveเพี้ยนน้อยลงมาก ขยับเสาแล้วขนาดจะไม่ค่อยเปลี่ยนแบบจอ 2D ทั่วไป
+      const camera = new THREE.PerspectiveCamera(22, window.innerWidth / window.innerHeight, 0.1, 100);
+      camera.position.set(0, 0, 15);
+      camera.lookAt(0, 0, 0);
+
+      const renderer = new THREE.WebGLRenderer({ antialias: true });
+      renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+      renderer.setSize(window.innerWidth, window.innerHeight);
+      container.appendChild(renderer.domElement);
+
+      // 2. แสงแบบราบเรียบ (Flat Light) ไม่ให้เกิดเงาหลอกตาบนตัวเสา
+      const ambient = new THREE.AmbientLight(0xffffff, 0.9);
+      scene.add(ambient);
+
+      // 3. เสาทรงกระบอก ใช้ MeshLambertMaterial ให้แสงด้าน สม่ำเสมอเท่ากันทุกระยะ
+      const poleGeo = new THREE.CylinderGeometry(0.08, 0.08, 1.6, 32);
+
+      const redMat = new THREE.MeshLambertMaterial({ color: 0xee3333 });
+      const redPole = new THREE.Mesh(poleGeo, redMat);
+      redPole.position.set(-0.5, 0, 0); // Static Z = 0
+      scene.add(redPole);
+
+      const greenMat = new THREE.MeshLambertMaterial({ color: 0x33ee66 });
+      const greenPole = new THREE.Mesh(poleGeo, greenMat);
+      greenPole.position.set(0.5, 0, 0);
+      scene.add(greenPole);
+
+      // (ตัดส่วนแผ่นเงา shadowDisc และพื้นหลังตู้ออกทั้งหมด)
+
+      function animate() {
+        requestAnimationFrame(animate);
+        renderer.render(scene, camera);
+      }
+      animate();
+
+      window.addEventListener('resize', () => {
+        camera.aspect = window.innerWidth / window.innerHeight;
+        camera.updateProjectionMatrix();
+        renderer.setSize(window.innerWidth, window.innerHeight);
+      });
+
+      // ---------------- Test logic ----------------
+      const roundStatusEl = document.getElementById('roundStatus');
+      const toast = document.getElementById('toast');
+      const toastErr = document.getElementById('toastErr');
+      const toastNext = document.getElementById('toastNext');
+      const controlsBar = document.getElementById('controlsBar');
+      const btnCloser = document.getElementById('btnCloser');
+      const btnFarther = document.getElementById('btnFarther');
+      const btnSubmit = document.getElementById('btnSubmit');
+      const modalOverlay = document.getElementById('modalOverlay');
+      const modalStatus = document.getElementById('modalStatus');
+      const modalStatusSub = document.getElementById('modalStatusSub');
+      const restartBtn = document.getElementById('restartBtn');
+
+      function randomOffset() {
+        let z;
+        do {
+          z = (Math.random() * 2 - 1) * Z_RANGE;
+        } while (Math.abs(z) < 0.2);
+        return z;
+      }
+
+      function startRound() {
+        greenPole.position.z = randomOffset();
+        locked = false;
+        toast.classList.remove('show');
+        controlsBar.style.display = '';
+        btnSubmit.disabled = false;
+        roundStatusEl.textContent = `รอบที่ ${round} จาก ${TOTAL_ROUNDS} · Round ${round} of ${TOTAL_ROUNDS}`;
+      }
+
+      function movePole(dir) {
+        if (locked) return;
+        greenPole.position.z = THREE.MathUtils.clamp(
+          greenPole.position.z + dir * MOVE_STEP, -2.2, 2.2
+        );
+      }
+
+      function submitRound() {
+        if (locked) return;
+        locked = true;
+
+        const errorUnits = Math.abs(greenPole.position.z - redPole.position.z);
+        const errorCm = errorUnits * CM_PER_UNIT;
+        roundErrors.push(errorCm);
+
+        toastErr.textContent = errorCm.toFixed(1) + ' ซม.';
+        toast.classList.add('show');
+        controlsBar.style.display = 'none';
+
+        toastNext.textContent = round < TOTAL_ROUNDS ? 'ถัดไป · Next' : 'ดูผลสรุป · See Results';
+      }
+
+      toastNext.addEventListener('click', () => {
+        if (round < TOTAL_ROUNDS) {
+          round += 1;
+          startRound();
+        } else {
+          showSummary();
+        }
+      });
+
+      function showSummary() {
+        toast.classList.remove('show');
+        const avg = roundErrors.reduce((a, b) => a + b, 0) / roundErrors.length;
+        const pass = avg <= PASS_THRESHOLD_CM;
+
+        modalStatus.textContent = pass ? 'PASS' : 'FAIL';
+        modalStatus.className = 'status ' + (pass ? 'pass' : 'fail');
+        modalStatusSub.textContent = (pass ? 'ผ่านเกณฑ์' : 'ไม่ผ่านเกณฑ์') +
+          ` · ค่าเฉลี่ยคลาดเคลื่อน ${avg.toFixed(1)} ซม. (เกณฑ์ ≤ ${PASS_THRESHOLD_CM} ซม.)`;
+
+        document.getElementById('r1val').textContent = roundErrors[0].toFixed(1) + ' ซม.';
+        document.getElementById('r2val').textContent = roundErrors[1].toFixed(1) + ' ซม.';
+        document.getElementById('r3val').textContent = roundErrors[2].toFixed(1) + ' ซม.';
+        document.getElementById('avgVal').textContent = avg.toFixed(1) + ' ซม.';
+
+        modalOverlay.classList.add('show');
+      }
+
+      restartBtn.addEventListener('click', () => {
+        round = 1;
+        roundErrors = [];
+        modalOverlay.classList.remove('show');
+        startRound();
+      });
+
+      // Buttons
+      btnCloser.addEventListener('click', () => movePole(1));   // เข้าหาตัว
+      btnFarther.addEventListener('click', () => movePole(-1)); // ออกไปไกล
+      btnSubmit.addEventListener('click', submitRound);
+
+      // Keyboard
+      window.addEventListener('keydown', (e) => {
+        if (e.key === 'ArrowUp') { e.preventDefault(); movePole(1); }
+        else if (e.key === 'ArrowDown') { e.preventDefault(); movePole(-1); }
+        else if (e.key === 'Enter') {
+          e.preventDefault();
+          if (toast.classList.contains('show')) {
+            toastNext.click();
+          } else if (!locked) {
+            submitRound();
+          }
+        }
+      });
+
+      // Init
+      startRound();
+    })();
+  </script>
+</body>
+
+</html>
